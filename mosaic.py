@@ -1,71 +1,17 @@
-import sys
-import Image
-
-import threading, os, sys, Tkinter, Image, ImageTk, time, random, traceback
-import commands
-from math import *
+import threading, os, sys, Image, time, random, traceback, commands, glob
 import numpy as np
 import scipy.misc as spm
 import scipy.ndimage.interpolation as spi
 
 DO_GREYSCALE = False
 DO_GREYSCALE_MATCH = False
-
 TRANSPARENCY = 0.3
+CIRCLE_DIV = 36
+TILE_LONG_SIDE = 55
 
 class A:
     pass
 
-# this class is just responsible for displaying the composite image on the
-# screen as it's being made:
-class Displayer(threading.Thread):    
-    def __init__(self):
-        threading.Thread.__init__(self)
-        self.started = False
-        self.setDaemon(True)
-        self.quit = False
-        self.root = None
-
-    def run(self):
-
-        self.root = Tkinter.Tk()
-        self.root.geometry('+%d+%d' % (100,100))
-        self.theImage = None
-
-        old_label_image = None        
-
-        while not self.started or self.theImage == None:
-            time.sleep(1.0)
-
-        while not self.quit:
-            self.root.geometry('%dx%d' % (self.theImage.size[0],self.theImage.size[1]))
-            tkpi = ImageTk.PhotoImage(self.theImage)
-            label_image = Tkinter.Label(self.root, image=tkpi)
-            label_image.place(x=0,y=0,width=self.theImage.size[0],height=self.theImage.size[1])
-            self.root.title('image')
-            if old_label_image is not None:
-                old_label_image.destroy()
-            old_label_image = label_image
-            self.root.mainloop() # wait until user clicks the window
-
-    def setImage(self, inImage):
-        self.started = True
-        tmpImage = inImage.copy()
-        frac1 = tmpImage.size[0] / 1000.0
-        frac2 = tmpImage.size[1] / 800.0
-        mfrac = max([frac1, frac2])
-        if mfrac > 1.0:
-            tmpImage = tmpImage.resize((int(tmpImage.size[0] / mfrac), int(tmpImage.size[1] / mfrac)), Image.NEAREST)
-
-        self.theImage = tmpImage
-        if self.root != None: self.root.quit()
-
-    def stop(self):
-        self.quit = True
-
-
-#disp = Displayer()
-#disp.start()
 
 if len(sys.argv) < 3:
     print 'Usage: %s reproduce_image image_lib_dir1 [image_lib_dir2...]'
@@ -75,40 +21,45 @@ reproImage = spm.imread(sys.argv[1])
 
 libFiles = []
 for direc in sys.argv[2:]:
-    libFiles.extend(commands.getoutput('find %s -name \*jpg'%direc).splitlines())
-    libFiles.extend(commands.getoutput('find %s -name \*JPG'%direc).splitlines())
+    libFiles.extend(glob.glob('%s/*jpg'%direc))
+    libFiles.extend(glob.glob('%s/*JPG'%direc))
 
-MAX_IMAGES = 600
+MAX_IMAGES = 2000
 while len(libFiles) > MAX_IMAGES:
     del libFiles[random.randint(0, len(libFiles) - 1)]
 
-MAX_TILE_LEN = 75
-NUM_ADJUST_CHECKS = 75
+
+NUM_ADJUST_CHECKS = 20
 TILE_MOVE = 3
 
 libImages = {}
 
-CIRCLE_DIV = 36
 
 # add a tile-ized version of the given image file to our image library,
 # and all rotations of it as well:
 def addToLib(imLib, fName):
     startImage = spm.imread(fName)
+    if len(startImage.shape) < 3:
+        return -1
     longLen = max(startImage.shape)
-    if longLen > MAX_TILE_LEN:
-        newX = int(startImage.shape[0] * MAX_TILE_LEN / longLen)
-        newY = int(startImage.shape[1] * MAX_TILE_LEN / longLen)
+
+    if longLen > TILE_LONG_SIDE:
+        newX = int(startImage.shape[0] * TILE_LONG_SIDE / longLen)
+        newY = int(startImage.shape[1] * TILE_LONG_SIDE / longLen)
         startImage = spm.imresize(startImage, (newX, newY))
 
     imLib[fName] = []
+    
     for i in range(CIRCLE_DIV):
         pixTile = spi.rotate(startImage, 360.0 * i / CIRCLE_DIV)
         newIm = A()
         newIm.im = pixTile
         if i == 5: spm.imsave('tmp.jpg', pixTile)
+        
         newIm.mask = np.sum(pixTile**2, axis=2) > 0.0
         imLib[fName].append(newIm)
 
+    return 1
 
             
 
@@ -120,7 +71,8 @@ def makesImageBetter(repImage, compImage, newTile, pos):
     nY = newTile.im.shape[1]
     repPiece = repImage[pos[0]:pos[0] + nX, pos[1]:pos[1] + nY]
     composPiece = compImage[pos[0]:pos[0] + nX, pos[1]:pos[1] + nY]
-    newCompPiece = TRANSPARENCY * composPiece + (1.0 - TRANSPARENCY) * newTile.im
+    #print ewTile.im.shape, composPiece.shape
+    newCompPiece = TRANSPARENCY * composPiece + (1.0 - TRANSPARENCY) * newTile.im[:, :, :3]
 
     
     if DO_GREYSCALE_MATCH:
@@ -142,7 +94,7 @@ def pasteIn(compImage, newTile, pos, mask=np.array([[1.0]])):
     nY = newTile.shape[1]
 
     composPiece = compImage[pos[0]:pos[0] + nX, pos[1]:pos[1] + nY]
-    newCompPiece = TRANSPARENCY * composPiece + (1.0 - TRANSPARENCY) * newTile
+    newCompPiece = TRANSPARENCY * composPiece + (1.0 - TRANSPARENCY) * newTile[:, :, :3]
     
     if DO_GREYSCALE:
         greyNewComp = 0.3 * newCompPiece[:, :, 0] + 0.59 * newCompPiece[:, :, 1] + 0.11 * newCompPiece[:, :, 2]
@@ -168,6 +120,7 @@ TEMP_MULT = 0.9
 
 TILE_TRIALS = 1000
 startTempTime = time.time()
+
 while True:
     # pick a random image from the library, and see if we need to add it to the
     # scaled images list:
@@ -175,7 +128,14 @@ while True:
     randFile = libFiles[random.randint(0, len(libFiles) - 1)]
     if not libImages.has_key(randFile):
         print 'adding', randFile, 'to library, loaded', len(libImList), 'of', len(libFiles)
-        addToLib(libImages, randFile)
+        try:
+            res = addToLib(libImages, randFile)
+            if res < 0:
+                print 'skipping'
+                continue
+        except:
+            print traceback.format_exc()
+            continue        
         libImList = libImages.keys()
 
     tileInd = random.randint(0, len(libImages[randFile]) - 1)
@@ -189,8 +149,11 @@ while True:
     for i in range(TILE_TRIALS):
         #print 'tile:', randFile, 'i:', i
         # pick a random location for the tile:
-        tileX = random.randint(0, reproImage.shape[0] - 1 - randTile.im.shape[0])
-        tileY = random.randint(0, reproImage.shape[1] - 1 - randTile.im.shape[1])
+        Ntx = reproImage.shape[0] / randTile.im.shape[0]
+        Nty = reproImage.shape[1] / randTile.im.shape[1]        
+        tileX = random.randint(0, Ntx - 1) * randTile.im.shape[0] #reproImage.shape[0] - 1 - randTile.im.shape[0])
+        tileY = random.randint(0, Nty - 1) * randTile.im.shape[1]
+        #tileY = random.randint(0, reproImage.shape[1] - 1 - randTile.im.shape[1])
 
         improvement = -1.0E13
         try:
@@ -254,6 +217,3 @@ while True:
         spm.imsave('result.jpg', compositeImage)
         lastSaveTime = timeNow
     pasteIn(dispImage, compositeImage, [reproImage.shape[0], 0])
-    #disp.setImage(dispImage)
-        
-#        time.sleep(1.0)
