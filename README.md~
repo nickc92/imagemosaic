@@ -37,7 +37,7 @@ renderPlan.py repro_image planfile scale
 
 * `repro_image` is generally the `result.jpg` that `mosaic.py` produces;
 * `planfile` is generally `plan.txt` that `mosaic.py` produces;
-* `scale`: if `repro_image` is NxN pixels, then the rendered image will be
-(scale N)x(scale N) pixels.
+* `scale`: if `repro_image` is $$N \times N$$ pixels, then the rendered image will be
+$$(scale N) \times (scale N)$$ pixels.
 
 `renderPlan.py` produces a file `render.jpg`.
