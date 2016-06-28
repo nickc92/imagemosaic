@@ -7,7 +7,7 @@ TRANSPARENCY = 0.3
 OUTFILE = 'render.jpg'
 
 if len(sys.argv) != 4:
-    print 'Usage:', sys.argv[0], 'targetImage planfile scale'
+    print 'Usage:', sys.argv[0], 'reproImage planfile scale'
     sys.exit()
     
 reproIm = Image.open(sys.argv[1])

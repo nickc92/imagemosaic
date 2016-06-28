@@ -3,11 +3,12 @@ import numpy as np
 import scipy.misc as spm
 import scipy.ndimage.interpolation as spi
 
-DO_GREYSCALE = False
-DO_GREYSCALE_MATCH = False
-TRANSPARENCY = 0.3
-CIRCLE_DIV = 36
-TILE_LONG_SIDE = 55
+DO_GREYSCALE = False        # render in greyscale
+DO_GREYSCALE_MATCH = False  # do image matching in greyscale
+TRANSPARENCY = 0.3          # transparency of tiles. 0=opaque
+CIRCLE_DIV = 36             # tile rotation discretization = 360 deg / CIRCLE_DIV.
+                            # set CIRCLE_DIV=1 for no rotations
+TILE_LONG_SIDE = 55         # the longer edge of the tile will be sized to this many pixels
 
 class A:
     pass
